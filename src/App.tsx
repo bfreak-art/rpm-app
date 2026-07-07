@@ -24,6 +24,7 @@ const NAV = [
 export default function App() {
   const { loaded, load, settings, toast, syncNow, markBumpedSlots, db } = useStore()
   const [captureOpen, setCaptureOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
 
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -79,6 +80,15 @@ export default function App() {
         </div>
       </aside>
 
+      {/* Top bar (mobile only) */}
+      <div className="sm:hidden flex items-center justify-between px-4 pt-3">
+        <div className="h-display text-2xl flex items-center gap-1.5">
+          <span className="text-signal">◎</span> RPM
+        </div>
+        <button aria-label="More" onClick={() => setMoreOpen(true)}
+          className="w-9 h-9 rounded-full flex items-center justify-center text-ink-mute hover:bg-black/5 dark:hover:bg-white/10 text-xl">⋯</button>
+      </div>
+
       {/* Main */}
       <main className="flex-1 p-4 sm:p-8 pb-28 sm:pb-8 max-w-5xl w-full mx-auto">
         <Routes>
@@ -109,6 +119,23 @@ export default function App() {
         className="sm:hidden fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-signal text-white text-2xl shadow-card">＋</button>
 
       <CaptureOverlay open={captureOpen} onClose={() => setCaptureOpen(false)} />
+
+      {/* More sheet (mobile): History & Settings */}
+      {moreOpen && (
+        <div className="sm:hidden fixed inset-0 z-50 bg-ink/50 flex items-end" onClick={() => setMoreOpen(false)}>
+          <div className="card w-full rounded-b-none p-3 pb-[max(env(safe-area-inset-bottom),12px)]" onClick={e => e.stopPropagation()}>
+            <NavLink to="/history" onClick={() => setMoreOpen(false)}
+              className="rounded-lg px-3 py-3 text-sm flex items-center gap-2.5 hover:bg-black/5 dark:hover:bg-white/10">
+              <span className="w-4 text-center">⌛</span>History
+            </NavLink>
+            <NavLink to="/settings" onClick={() => setMoreOpen(false)}
+              className="rounded-lg px-3 py-3 text-sm flex items-center gap-2.5 hover:bg-black/5 dark:hover:bg-white/10">
+              <span className="w-4 text-center">⚙</span>Settings
+            </NavLink>
+            <button className="btn-ghost w-full mt-1" onClick={() => setMoreOpen(false)}>Close</button>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className="fixed bottom-24 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 bg-ink text-white text-sm px-4 py-2 rounded-full shadow-card">
