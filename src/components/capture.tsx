@@ -1,0 +1,158 @@
+import { useEffect, useRef, useState } from 'react'
+import { useStore, live } from '../store/store'
+import { Modal } from './ui'
+import { Block, BlockScope } from '../lib/types'
+import { dayKey, weekKey } from '../lib/utils'
+
+/* ---------- Global capture overlay ---------- */
+export function CaptureOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const addCapture = useStore(s => s.addCapture)
+  const [lane, setLane] = useState<'idea' | 'comm'>('idea')
+  const [text, setText] = useState('')
+  const [count, setCount] = useState(0)
+  const [listening, setListening] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const recRef = useRef<any>(null)
+
+  useEffect(() => { if (open) { setCount(0); setTimeout(() => inputRef.current?.focus(), 50) } }, [open])
+
+  const submit = () => {
+    if (!text.trim()) return
+    addCapture(text, lane)
+    setText('')
+    setCount(c => c + 1)
+    inputRef.current?.focus() // cursor instantly ready for the next item
+  }
+
+  const speechSupported = typeof window !== 'undefined' &&
+    ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
+
+  const toggleVoice = () => {
+    if (listening) { recRef.current?.stop(); return }
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    const rec = new SR()
+    rec.lang = navigator.language || 'en-US'
+    rec.interimResults = false
+    rec.onresult = (e: any) => {
+      const t = e.results[e.results.length - 1][0].transcript.trim()
+      if (t) { useStore.getState().addCapture(t, lane); setCount(c => c + 1) }
+    }
+    rec.onend = () => setListening(false)
+    recRef.current = rec
+    rec.start()
+    setListening(true)
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Capture">
+      <div className="flex gap-1 mb-3">
+        <button className={`btn flex-1 text-sm ${lane === 'idea' ? 'bg-ink text-white' : 'bg-black/5 dark:bg-white/10'}`} onClick={() => setLane('idea')}>Ideas · Wants · Needs</button>
+        <button className={`btn flex-1 text-sm ${lane === 'comm' ? 'bg-ink text-white' : 'bg-black/5 dark:bg-white/10'}`} onClick={() => setLane('comm')}>Communications</button>
+      </div>
+      <form onSubmit={e => { e.preventDefault(); submit() }} className="flex gap-2">
+        <input ref={inputRef} className="input" placeholder="Get it out of your head…" value={text} onChange={e => setText(e.target.value)} />
+        {speechSupported && (
+          <button type="button" onClick={toggleVoice}
+            className={`btn shrink-0 ${listening ? 'bg-signal text-white animate-pulse' : 'bg-black/5 dark:bg-white/10'}`}
+            aria-label="Voice capture">🎙</button>
+        )}
+      </form>
+      <div className="mt-3 flex items-center justify-between text-xs text-ink-mute">
+        <span>{count > 0 ? `${count} captured — keep going` : 'This is not your plan. Just empty your head.'}</span>
+        <button className="btn-primary text-xs" onClick={onClose}>Done</button>
+      </div>
+    </Modal>
+  )
+}
+
+/* ---------- New Block flow: the 3 Questions, in the mandated order ---------- */
+export function NewBlockModal({ open, onClose, defaults, onCreated }: {
+  open: boolean
+  onClose: () => void
+  defaults?: Partial<Block>
+  onCreated?: (b: Block) => void
+}) {
+  const db = useStore(s => s.db)
+  const createBlock = useStore(s => s.createBlock)
+  const addAction = useStore(s => s.addAction)
+  const [step, setStep] = useState(0)
+  const [result, setResult] = useState('')
+  const [purpose, setPurpose] = useState('')
+  const [map, setMap] = useState('')
+  const [categoryId, setCategoryId] = useState(defaults?.categoryId ?? '')
+  const [scope, setScope] = useState<BlockScope>(defaults?.scope ?? 'daily')
+  const [isMust, setIsMust] = useState(false)
+  const cats = live(db.categories).filter(c => !c.archived)
+
+  useEffect(() => {
+    if (open) {
+      setStep(0); setResult(''); setPurpose(''); setMap('')
+      setCategoryId(defaults?.categoryId ?? ''); setScope(defaults?.scope ?? 'daily'); setIsMust(false)
+    }
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const QUESTIONS = [
+    { title: '1 · Result', q: 'What do I really want? What Result am I committed to achieving?' },
+    { title: '2 · Purpose', q: 'Why do I want it? Why is it a must? How will it make me feel?' },
+    { title: '3 · Massive Action Plan', q: 'What specific actions could get me this Result? (One per line — a menu of choices, not have-tos.)' }
+  ]
+
+  const finish = () => {
+    const b = createBlock({
+      result: result.trim(), purpose: purpose.trim(),
+      categoryId: categoryId || undefined,
+      projectId: defaults?.projectId,
+      scope, isMust,
+      periodDate: defaults?.periodDate ?? (scope === 'weekly' ? weekKey() : scope === 'project' ? '' : dayKey())
+    })
+    map.split('\n').map(l => l.trim()).filter(Boolean).forEach(l => addAction(b.id, l))
+    onCreated?.(b)
+    onClose()
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="New RPM Block">
+      <p className="label">{QUESTIONS[step].title}</p>
+      <p className="text-sm mb-2">{QUESTIONS[step].q}</p>
+      {step === 0 && <input autoFocus className="input" value={result} onChange={e => setResult(e.target.value)} placeholder="Clarity is power — be specific" />}
+      {step === 1 && <textarea autoFocus className="input min-h-24" value={purpose} onChange={e => setPurpose(e.target.value)} placeholder="Use words that move you — emotion is the fuel" />}
+      {step === 2 && <textarea autoFocus className="input min-h-28 font-mono text-sm" value={map} onChange={e => setMap(e.target.value)} placeholder={'One action per line'} />}
+
+      {step === 2 && (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div>
+            <span className="label">Category</span>
+            <select className="input" value={categoryId} onChange={e => setCategoryId(e.target.value)}>
+              <option value="">—</option>
+              {cats.map(c => <option key={c.id} value={c.id}>{c.juicyName || c.name}</option>)}
+            </select>
+          </div>
+          {!defaults?.projectId && (
+            <div>
+              <span className="label">Scope</span>
+              <select className="input" value={scope} onChange={e => setScope(e.target.value as BlockScope)}>
+                <option value="daily">Today</option>
+                <option value="weekly">This week</option>
+              </select>
+            </div>
+          )}
+          <label className="col-span-2 flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={isMust} onChange={e => setIsMust(e.target.checked)} />
+            <span><b className="text-signal">*</b> This Result is a Must — non-negotiable</span>
+          </label>
+        </div>
+      )}
+
+      <div className="mt-4 flex justify-between">
+        <button className="btn-ghost" onClick={() => step === 0 ? onClose() : setStep(step - 1)}>{step === 0 ? 'Cancel' : 'Back'}</button>
+        {step < 2
+          ? <button className="btn-primary" disabled={step === 0 ? !result.trim() : !purpose.trim()}
+              onClick={() => setStep(step + 1)}>Next</button>
+          : <button className="btn-signal" disabled={!result.trim() || !purpose.trim()} onClick={finish}>Create Block</button>}
+      </div>
+      {step === 1 && !purpose.trim() && (
+        <p className="text-[11px] text-ink-mute mt-2">Don't skip your Purpose — without the why, the plan loses its drive.</p>
+      )}
+    </Modal>
+  )
+}

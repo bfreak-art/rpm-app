@@ -1,0 +1,28 @@
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/barlow-condensed/600.css';
+@import '@fontsource/barlow-condensed/700.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light dark; }
+html, body, #root { height: 100%; }
+body { @apply bg-paper text-ink font-body antialiased; }
+.dark body { @apply bg-paper-dark text-paper; }
+
+.card { @apply bg-paper-card dark:bg-paper-darkcard rounded-xl shadow-card; }
+.h-display { @apply font-display uppercase tracking-wide; }
+.btn { @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors; }
+.btn-primary { @apply btn bg-ink text-white hover:bg-ink-soft dark:bg-signal dark:hover:opacity-90; }
+.btn-signal { @apply btn bg-signal text-white hover:opacity-90; }
+.btn-ghost { @apply btn text-ink-mute hover:bg-black/5 dark:text-slate-300 dark:hover:bg-white/10; }
+.input { @apply w-full rounded-lg border border-black/10 dark:border-white/15 bg-white dark:bg-paper-darkcard px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-signal/40; }
+.label { @apply block text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-1; }
+.purpose-text { @apply italic text-[13px] leading-snug text-ink-soft dark:text-slate-300; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
