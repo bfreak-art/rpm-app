@@ -10,7 +10,7 @@ import { createEvent, updateEvent, deleteEvent } from '../lib/gcal'
 
 const emptyDB = (): DB => ({
   areas: {}, categories: {}, projects: {}, blocks: {}, actions: {},
-  captures: {}, slots: {}, reviews: {}, badges: {}
+  captures: {}, slots: {}, reviews: {}, badges: {}, feedbacks: {}
 })
 
 const defaultSettings = (): Settings => ({
@@ -25,6 +25,15 @@ interface StoreState {
   loaded: boolean
   syncing: boolean
   toast: string | null
+  tourStep: number | null
+  canUndo: boolean
+  canRedo: boolean
+
+  startTour: () => void
+  endTour: () => void
+  setTourStep: (n: number) => void
+  undo: () => void
+  redo: () => void
 
   load: () => Promise<void>
   persist: () => void
@@ -41,6 +50,7 @@ interface StoreState {
   seedDefaults: () => void
   addCapture: (text: string, lane: 'idea' | 'comm') => void
   chunkCapture: (captureId: ID, blockId: ID) => void
+  markChunked: (captureId: ID, blockId: ID) => void
   dismissCapture: (captureId: ID) => void
   createBlock: (b: Partial<Block> & { result: string; purpose: string }) => Block
   addAction: (blockId: ID, text: string, extra?: Partial<Action>) => Action
@@ -61,6 +71,19 @@ interface StoreState {
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null
 
+/* ---------- undo / redo (session-only, snapshot-based) ---------- */
+let past: DB[] = []
+let future: DB[] = []
+let lastSnapshotAt = 0
+const HISTORY_LIMIT = 40
+
+const stripMeta = (r: any) => {
+  const { updatedAt, ...rest } = r
+  return rest
+}
+const rowsDiffer = (a: any, b: any) =>
+  JSON.stringify(a ? stripMeta(a) : null) !== JSON.stringify(b ? stripMeta(b) : null)
+
 export const useStore = create<StoreState>((set, get) => ({
   db: emptyDB(),
   settings: defaultSettings(),
@@ -68,9 +91,35 @@ export const useStore = create<StoreState>((set, get) => ({
   loaded: false,
   syncing: false,
   toast: null,
+  tourStep: null,
+  canUndo: false,
+  canRedo: false,
+
+  startTour: () => set({ tourStep: 0 }),
+  endTour: () => set({ tourStep: null }),
+  setTourStep: n => set({ tourStep: n }),
+
+  undo: () => {
+    if (!past.length) return
+    future.unshift(structuredClone(get().db))
+    const target = past.pop()!
+    applyRestored(get, set, target)
+    set({ canUndo: past.length > 0, canRedo: true })
+    get().setToast('↶ Undone')
+  },
+
+  redo: () => {
+    if (!future.length) return
+    past.push(structuredClone(get().db))
+    const target = future.shift()!
+    applyRestored(get, set, target)
+    set({ canUndo: true, canRedo: future.length > 0 })
+    get().setToast('↷ Redone')
+  },
 
   load: async () => {
-    const db = (await idbGet<DB>('rpm-db')) ?? emptyDB()
+    const stored = (await idbGet<DB>('rpm-db')) ?? emptyDB()
+    const db = { ...emptyDB(), ...stored }
     const settings = { ...defaultSettings(), ...((await idbGet<Settings>('rpm-settings')) ?? {}) }
     const dirty = (await idbGet<Record<string, Kind>>('rpm-dirty')) ?? {}
     set({ db, settings, dirty, loaded: true })
@@ -143,6 +192,14 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   upsert: (kind, row) => {
+    // snapshot for undo (grouped: mutations within 400ms form one step)
+    if (Date.now() - lastSnapshotAt > 400) {
+      past.push(structuredClone(get().db))
+      if (past.length > HISTORY_LIMIT) past.shift()
+      future = []
+      lastSnapshotAt = Date.now()
+      set({ canUndo: true, canRedo: false })
+    }
     row.updatedAt = now()
     set(s => {
       const key = KIND_TO_KEY[kind]
@@ -195,6 +252,12 @@ export const useStore = create<StoreState>((set, get) => ({
     if (!c) return
     get().upsert<CaptureItem>('capture', { ...c, status: 'chunked', blockId })
     get().addAction(blockId, c.text)
+  },
+
+  markChunked: (captureId, blockId) => {
+    const c = get().db.captures[captureId]
+    if (!c) return
+    get().upsert<CaptureItem>('capture', { ...c, status: 'chunked', blockId })
   },
 
   dismissCapture: captureId => {
@@ -415,6 +478,36 @@ export const useStore = create<StoreState>((set, get) => ({
     }
   }
 }))
+
+/* ---------- undo restore: diff, bump timestamps, mark dirty for sync ---------- */
+function applyRestored(
+  get: () => StoreState,
+  set: (p: Partial<StoreState> | ((s: StoreState) => Partial<StoreState>)) => void,
+  target: DB
+) {
+  const current = get().db
+  const t = now()
+  const restored: DB = structuredClone(target)
+  const dirty: Record<string, Kind> = { ...get().dirty }
+  const kinds = Object.entries(KIND_TO_KEY) as [Kind, keyof DB][]
+  for (const [kind, key] of kinds) {
+    const cur = current[key] as Record<string, Base>
+    const tgt = restored[key] as Record<string, Base>
+    const ids = new Set([...Object.keys(cur), ...Object.keys(tgt)])
+    for (const id of ids) {
+      if (tgt[id] && rowsDiffer(cur[id], tgt[id])) {
+        tgt[id] = { ...tgt[id], updatedAt: t }
+        dirty[id] = kind
+      } else if (!tgt[id] && cur[id] && !cur[id].deleted) {
+        tgt[id] = { ...cur[id], deleted: true, updatedAt: t }
+        dirty[id] = kind
+      }
+    }
+  }
+  set({ db: restored, dirty })
+  get().persist()
+  if (syncEnabled) queueMicrotask(() => get().syncNow().catch(() => {}))
+}
 
 /* ---------- selectors ---------- */
 

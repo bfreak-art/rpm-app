@@ -11,6 +11,7 @@ import Progress from './screens/Progress'
 import History from './screens/History'
 import Settings from './screens/Settings'
 import Onboarding from './screens/Onboarding'
+import Tutorial from './components/tutorial'
 
 const NAV = [
   { to: '/', label: 'Today', icon: '◎' },
@@ -22,7 +23,7 @@ const NAV = [
 ]
 
 export default function App() {
-  const { loaded, load, settings, toast, syncNow, markBumpedSlots, db } = useStore()
+  const { loaded, load, settings, toast, syncNow, markBumpedSlots, db, canUndo, canRedo, undo, redo, startTour } = useStore()
   const [captureOpen, setCaptureOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
 
@@ -39,11 +40,16 @@ export default function App() {
     return () => { window.removeEventListener('focus', onFocus); clearInterval(iv) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // keyboard: "c" opens capture
+  // keyboard: "c" opens capture; Ctrl+Z / Ctrl+Y undo-redo
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if (e.key === 'c' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      if (e.key === 'c' && !typing && !e.ctrlKey && !e.metaKey) {
         e.preventDefault(); setCaptureOpen(true)
+      }
+      if ((e.ctrlKey || e.metaKey) && !typing) {
+        if (e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); useStore.getState().undo() }
+        if (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey)) { e.preventDefault(); useStore.getState().redo() }
       }
     }
     window.addEventListener('keydown', h)
@@ -73,10 +79,16 @@ export default function App() {
           <span className="w-4 text-center">⌛</span>History
         </NavLink>
         <div className="mt-auto">
+          <div className="flex gap-1 mb-1">
+            <button aria-label="Undo" title="Undo (Ctrl+Z)" disabled={!canUndo} onClick={undo}
+              className="flex-1 rounded-lg py-1.5 text-white/80 hover:bg-white/10 disabled:opacity-30">↶</button>
+            <button aria-label="Redo" title="Redo (Ctrl+Y)" disabled={!canRedo} onClick={redo}
+              className="flex-1 rounded-lg py-1.5 text-white/80 hover:bg-white/10 disabled:opacity-30">↷</button>
+          </div>
           <NavLink to="/settings" className={({ isActive }) => `rounded-lg px-3 py-2 text-sm flex items-center gap-2.5 ${isActive ? 'bg-white/15 font-semibold' : 'text-white/70 hover:bg-white/10'}`}>
             <span className="w-4 text-center">⚙</span>Settings
           </NavLink>
-          <button className="w-full mt-2 btn-signal" onClick={() => setCaptureOpen(true)}>＋ Capture <kbd className="text-[10px] opacity-70">C</kbd></button>
+          <button data-tour="capture" className="w-full mt-2 btn-signal" onClick={() => setCaptureOpen(true)}>＋ Capture <kbd className="text-[10px] opacity-70">C</kbd></button>
         </div>
       </aside>
 
@@ -85,8 +97,14 @@ export default function App() {
         <div className="h-display text-2xl flex items-center gap-1.5">
           <span className="text-signal">◎</span> RPM
         </div>
-        <button aria-label="More" onClick={() => setMoreOpen(true)}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-ink-mute hover:bg-black/5 dark:hover:bg-white/10 text-xl">⋯</button>
+        <div className="flex items-center gap-0.5">
+          <button aria-label="Undo" disabled={!canUndo} onClick={undo}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-ink-mute disabled:opacity-30 text-lg">↶</button>
+          <button aria-label="Redo" disabled={!canRedo} onClick={redo}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-ink-mute disabled:opacity-30 text-lg">↷</button>
+          <button aria-label="More" onClick={() => setMoreOpen(true)}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-ink-mute hover:bg-black/5 dark:hover:bg-white/10 text-xl">⋯</button>
+        </div>
       </div>
 
       {/* Main */}
@@ -115,10 +133,12 @@ export default function App() {
       </nav>
 
       {/* Capture FAB (mobile) */}
-      <button aria-label="Capture" onClick={() => setCaptureOpen(true)}
-        className="sm:hidden fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-signal text-white text-2xl shadow-card">＋</button>
+      <button aria-label="Capture" data-tour="capture" onClick={() => setCaptureOpen(true)}
+        className="sm:hidden fixed bottom-20 right-4 z-30 w-14 h-14 rounded-full bg-signal text-white text-2xl shadow-card">＋</button>
 
       <CaptureOverlay open={captureOpen} onClose={() => setCaptureOpen(false)} />
+
+      <Tutorial />
 
       {/* More sheet (mobile): History & Settings */}
       {moreOpen && (
@@ -132,6 +152,10 @@ export default function App() {
               className="rounded-lg px-3 py-3 text-sm flex items-center gap-2.5 hover:bg-black/5 dark:hover:bg-white/10">
               <span className="w-4 text-center">⚙</span>Settings
             </NavLink>
+            <button onClick={() => { setMoreOpen(false); startTour() }}
+              className="w-full rounded-lg px-3 py-3 text-sm flex items-center gap-2.5 hover:bg-black/5 dark:hover:bg-white/10">
+              <span className="w-4 text-center">▶</span>Interactive tutorial
+            </button>
             <button className="btn-ghost w-full mt-1" onClick={() => setMoreOpen(false)}>Close</button>
           </div>
         </div>

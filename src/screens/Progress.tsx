@@ -98,7 +98,7 @@ export default function Progress() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 mb-4">
-        <div className="card p-4 flex flex-col items-center">
+        <div className="card p-4 flex flex-col items-center" data-tour="bullseye">
           <p className="label self-start">Time Target — week of {fmtDay(weekKey())}</p>
           <Bullseye zonePct={zonePct} />
         </div>

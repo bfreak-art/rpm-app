@@ -114,6 +114,11 @@ export interface BadgeAward extends Base {
   earnedAt: number
 }
 
+export interface FeedbackNote extends Base {
+  text: string
+  createdAt: number
+}
+
 export interface Settings {
   theme: 'light' | 'dark'
   rituals: boolean
@@ -126,7 +131,7 @@ export interface Settings {
 
 export type Kind =
   | 'area' | 'category' | 'project' | 'block' | 'action'
-  | 'capture' | 'slot' | 'review' | 'badge'
+  | 'capture' | 'slot' | 'review' | 'badge' | 'feedback'
 
 export interface DB {
   areas: Record<ID, Area>
@@ -138,11 +143,13 @@ export interface DB {
   slots: Record<ID, Slot>
   reviews: Record<ID, Review>
   badges: Record<ID, BadgeAward>
+  feedbacks: Record<ID, FeedbackNote>
 }
 
 export const KIND_TO_KEY: Record<Kind, keyof DB> = {
   area: 'areas', category: 'categories', project: 'projects', block: 'blocks',
-  action: 'actions', capture: 'captures', slot: 'slots', review: 'reviews', badge: 'badges'
+  action: 'actions', capture: 'captures', slot: 'slots', review: 'reviews', badge: 'badges',
+  feedback: 'feedbacks'
 }
 
 export const emptyM7 = (): Magnificent7 => ({

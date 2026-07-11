@@ -10,17 +10,22 @@ export function CaptureOverlay({ open, onClose }: { open: boolean; onClose: () =
   const [lane, setLane] = useState<'idea' | 'comm'>('idea')
   const [text, setText] = useState('')
   const [count, setCount] = useState(0)
+  const [recent, setRecent] = useState<string[]>([])
+  const [flash, setFlash] = useState(false)
   const [listening, setListening] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const recRef = useRef<any>(null)
 
-  useEffect(() => { if (open) { setCount(0); setTimeout(() => inputRef.current?.focus(), 50) } }, [open])
+  useEffect(() => { if (open) { setCount(0); setRecent([]); setTimeout(() => inputRef.current?.focus(), 50) } }, [open])
 
   const submit = () => {
     if (!text.trim()) return
     addCapture(text, lane)
+    setRecent(r => [text.trim(), ...r].slice(0, 4))
     setText('')
     setCount(c => c + 1)
+    setFlash(true)
+    setTimeout(() => setFlash(false), 500)
     inputRef.current?.focus() // cursor instantly ready for the next item
   }
 
@@ -50,15 +55,26 @@ export function CaptureOverlay({ open, onClose }: { open: boolean; onClose: () =
         <button className={`btn flex-1 text-sm ${lane === 'comm' ? 'bg-ink text-white' : 'bg-black/5 dark:bg-white/10'}`} onClick={() => setLane('comm')}>Communications</button>
       </div>
       <form onSubmit={e => { e.preventDefault(); submit() }} className="flex gap-2">
-        <input ref={inputRef} className="input" placeholder="Get it out of your head…" value={text} onChange={e => setText(e.target.value)} />
+        <input ref={inputRef} className={`input transition-shadow ${flash ? 'ring-2 ring-zone' : ''}`} placeholder="Get it out of your head…" value={text} onChange={e => setText(e.target.value)} />
         {speechSupported && (
           <button type="button" onClick={toggleVoice}
             className={`btn shrink-0 ${listening ? 'bg-signal text-white animate-pulse' : 'bg-black/5 dark:bg-white/10'}`}
             aria-label="Voice capture">🎙</button>
         )}
       </form>
+      {recent.length > 0 && (
+        <div className="mt-3 space-y-1">
+          {recent.map((r, i) => (
+            <div key={`${r}-${count}-${i}`} className={`flex items-center gap-2 text-sm rounded-lg px-2.5 py-1.5 bg-black/5 dark:bg-white/10 ${i === 0 ? 'animate-pop' : ''}`}>
+              <span className="text-zone font-bold">✓</span>
+              <span className="flex-1 truncate">{r}</span>
+              <span className="text-[10px] text-ink-mute">saved to Inbox</span>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="mt-3 flex items-center justify-between text-xs text-ink-mute">
-        <span>{count > 0 ? `${count} captured — keep going` : 'This is not your plan. Just empty your head.'}</span>
+        <span>{count > 0 ? `✓ ${count} captured — keep going, or…` : 'This is not your plan. Just empty your head.'}</span>
         <button className="btn-primary text-xs" onClick={onClose}>Done</button>
       </div>
     </Modal>
@@ -66,11 +82,13 @@ export function CaptureOverlay({ open, onClose }: { open: boolean; onClose: () =
 }
 
 /* ---------- New Block flow: the 3 Questions, in the mandated order ---------- */
-export function NewBlockModal({ open, onClose, defaults, onCreated }: {
+export function NewBlockModal({ open, onClose, defaults, onCreated, prefillActions }: {
   open: boolean
   onClose: () => void
   defaults?: Partial<Block>
   onCreated?: (b: Block) => void
+  /** capture texts that will become the MAP — shown pre-filled so nothing is typed twice */
+  prefillActions?: string[]
 }) {
   const db = useStore(s => s.db)
   const createBlock = useStore(s => s.createBlock)
@@ -86,7 +104,8 @@ export function NewBlockModal({ open, onClose, defaults, onCreated }: {
 
   useEffect(() => {
     if (open) {
-      setStep(0); setResult(''); setPurpose(''); setMap('')
+      setStep(0); setResult(''); setPurpose('')
+      setMap(prefillActions?.length ? prefillActions.join('\n') : '')
       setCategoryId(defaults?.categoryId ?? ''); setScope(defaults?.scope ?? 'daily'); setIsMust(false)
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -94,7 +113,7 @@ export function NewBlockModal({ open, onClose, defaults, onCreated }: {
   const QUESTIONS = [
     { title: '1 · Result', q: 'What do I really want? What Result am I committed to achieving?' },
     { title: '2 · Purpose', q: 'Why do I want it? Why is it a must? How will it make me feel?' },
-    { title: '3 · Massive Action Plan', q: 'What specific actions could get me this Result? (One per line — a menu of choices, not have-tos.)' }
+    { title: '3 · Massive Action Plan', q: 'What specific actions could get me this Result? One per line. This is a MENU of options, not another to-do list — you\u2019ll rarely need all of them (20% of actions usually deliver 80% of the Result).' }
   ]
 
   const finish = () => {
@@ -116,7 +135,16 @@ export function NewBlockModal({ open, onClose, defaults, onCreated }: {
       <p className="text-sm mb-2">{QUESTIONS[step].q}</p>
       {step === 0 && <input autoFocus className="input" value={result} onChange={e => setResult(e.target.value)} placeholder="Clarity is power — be specific" />}
       {step === 1 && <textarea autoFocus className="input min-h-24" value={purpose} onChange={e => setPurpose(e.target.value)} placeholder="Use words that move you — emotion is the fuel" />}
-      {step === 2 && <textarea autoFocus className="input min-h-28 font-mono text-sm" value={map} onChange={e => setMap(e.target.value)} placeholder={'One action per line'} />}
+      {step === 2 && (
+        <>
+          {prefillActions && prefillActions.length > 0 && (
+            <p className="text-[11px] text-zone bg-zone-soft dark:bg-zone/20 rounded-lg px-2.5 py-1.5 mb-2">
+              ✓ Your {prefillActions.length} selected capture{prefillActions.length > 1 ? 's are' : ' is'} already here — they MOVE from the Inbox into this plan (no duplicates). Add more lines only if something's missing.
+            </p>
+          )}
+          <textarea autoFocus className="input min-h-28 font-mono text-sm" value={map} onChange={e => setMap(e.target.value)} placeholder={'One action per line'} />
+        </>
+      )}
 
       {step === 2 && (
         <div className="mt-3 grid grid-cols-2 gap-2">

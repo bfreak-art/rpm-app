@@ -187,7 +187,7 @@ export default function Week() {
       <p className="text-sm text-ink-mute mb-4">Week of {fmtDay(wk)} · Total Must Time {fmtDur(totalMust)}</p>
 
       <div className="flex flex-wrap gap-2 mb-5">
-        <button className="btn-signal" onClick={() => setWizard(true)}>▶ Weekly Planning</button>
+        <button className="btn-signal" data-tour="weekly-planning" onClick={() => setWizard(true)}>▶ Weekly Planning</button>
         <button className="btn-ghost" onClick={() => setReview(true)}>✦ Weekly review</button>
       </div>
 

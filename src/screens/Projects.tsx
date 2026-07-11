@@ -155,7 +155,7 @@ function ProjectList() {
         <h1 className="h-display text-4xl">Projects</h1>
         <HelpButton text={HELP} />
       </div>
-      <button className="btn-primary mb-4" onClick={() => setCreating(true)}>＋ New Project</button>
+      <button className="btn-primary mb-4" data-tour="projects" onClick={() => setCreating(true)}>＋ New Project</button>
       <div className="grid gap-3 sm:grid-cols-2">{active.map(p => <Card key={p.id} p={p} />)}</div>
       {active.length === 0 && <p className="text-sm text-ink-mute">No active Projects. A dream with a plan becomes a Project.</p>}
       {done.length > 0 && <>

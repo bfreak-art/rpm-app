@@ -85,10 +85,10 @@ function CategoryCard({ cat }: { cat: Category }) {
   const lastWheel = cat.wheel.length ? cat.wheel[cat.wheel.length - 1].pct : null
 
   return (
-    <div className="card p-4 border-l-4" style={{ borderLeftColor: cat.color }}>
+    <div className="card p-3 sm:p-4 border-l-4 min-w-0 overflow-hidden" style={{ borderLeftColor: cat.color }}>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className="h-display text-2xl leading-tight">{cat.juicyName || cat.name}</h3>
+          <h3 className="h-display text-xl sm:text-2xl leading-tight break-words">{cat.juicyName || cat.name}</h3>
           {cat.juicyName && <p className="text-xs text-ink-mute">{cat.name}</p>}
           {cat.roles.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5">
@@ -99,17 +99,17 @@ function CategoryCard({ cat }: { cat: Category }) {
         <button className="btn-ghost text-xs shrink-0" onClick={() => setEditing(true)}>Edit</button>
       </div>
 
-      <div className="mt-3 flex items-center gap-3 text-xs text-ink-mute">
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-ink-mute">
         <button className="btn-ghost text-xs px-2" onClick={() => setM7Open(true)}>
           <b className={m7Filled === 9 ? 'text-zone' : ''}>7</b>&nbsp;Magnificent 7 · {m7Filled}/9
         </button>
         <span>{projects.length} active project{projects.length === 1 ? '' : 's'}</span>
-        <label className="ml-auto flex items-center gap-1.5">
+        <label className="sm:ml-auto flex items-center gap-1.5">
           Wheel
           <input type="range" min={0} max={100} step={5} defaultValue={lastWheel ?? 50}
             onMouseUp={e => rateWheel(cat.id, parseInt((e.target as HTMLInputElement).value))}
             onTouchEnd={e => rateWheel(cat.id, parseInt((e.target as HTMLInputElement).value))}
-            className="accent-current w-20" style={{ color: cat.color }} />
+            className="accent-current w-16 sm:w-20" style={{ color: cat.color }} />
           <b>{lastWheel !== null ? `${lastWheel}%` : '—'}</b>
         </label>
       </div>
@@ -171,13 +171,13 @@ export default function LifePlan() {
         <h1 className="h-display text-4xl">Life Plan</h1>
         <HelpButton text={HELP} />
       </div>
-      {areas.map(area => (
-        <section key={area.id} className="mb-6">
+      {areas.map((area, ai) => (
+        <section key={area.id} className="mb-6" data-tour={ai === 0 ? 'lifeplan' : undefined}>
           <div className="flex items-center gap-3 mb-3">
-            <h2 className="h-display text-3xl text-ink-mute">{area.name}</h2>
+            <h2 className="h-display text-2xl sm:text-3xl text-ink-mute">{area.name}</h2>
             <button className="btn-ghost text-xs" onClick={() => addCategory(area.id)}>＋ Category</button>
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-2 min-w-0">
             {cats.filter(c => c.areaId === area.id).sort((a, b) => a.sort - b.sort).map(c => <CategoryCard key={c.id} cat={c} />)}
           </div>
         </section>

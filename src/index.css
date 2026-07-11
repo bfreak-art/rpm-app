@@ -23,6 +23,13 @@ body { @apply bg-paper text-ink font-body antialiased; }
 .label { @apply block text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-1; }
 .purpose-text { @apply italic text-[13px] leading-snug text-ink-soft dark:text-slate-300; }
 
+@keyframes pop {
+  0% { transform: scale(.85); opacity: 0; }
+  60% { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-pop { animation: pop .35s ease-out; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

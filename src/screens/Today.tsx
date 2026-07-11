@@ -171,7 +171,7 @@ export default function Today() {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2" data-tour="today-blocks">
         {blocks.map(b => (
           <BlockCard key={b.id} block={b} categoryColor={cat(b.categoryId)?.color}
             footer={
@@ -183,7 +183,7 @@ export default function Today() {
       </div>
 
       {blocks.length === 0 && (
-        <div className="card p-8 text-center text-ink-mute">
+        <div className="card p-8 text-center text-ink-mute" data-tour="today-blocks">
           <p className="h-display text-2xl mb-1 text-ink dark:text-white">No Blocks yet</p>
           <p className="text-sm">Ask the first question of the day: what Result am I committed to achieve?</p>
         </div>
@@ -191,7 +191,7 @@ export default function Today() {
 
       <div className="mt-4 flex gap-2">
         <button className="btn-primary" onClick={() => setNewBlock(true)}>＋ New Block</button>
-        <button className="btn-ghost" onClick={() => setReviewOpen(true)}>
+        <button className="btn-ghost" data-tour="evening-review" onClick={() => setReviewOpen(true)}>
           {review?.achievements ? '✦ Review saved — edit' : '✦ Evening review'}
         </button>
       </div>

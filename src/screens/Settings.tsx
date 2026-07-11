@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useStore } from '../store/store'
+import { useStore, live } from '../store/store'
+import { uid, now } from '../lib/utils'
+import { FeedbackNote } from '../lib/types'
 import { syncEnabled, signInMagicLink, signOut, getSession } from '../lib/sync'
 import { gcalAvailable, connectGcal } from '../lib/gcal'
 
@@ -8,6 +10,12 @@ export default function Settings() {
   const setSettings = useStore(s => s.setSettings)
   const setToast = useStore(s => s.setToast)
   const syncNow = useStore(s => s.syncNow)
+  const db = useStore(s => s.db)
+  const upsert = useStore(s => s.upsert)
+  const softDelete = useStore(s => s.softDelete)
+  const startTour = useStore(s => s.startTour)
+  const [note, setNote] = useState('')
+  const notes = live(db.feedbacks).sort((a, b) => b.createdAt - a.createdAt)
   const [email, setEmail] = useState('')
   const [sessionEmail, setSessionEmail] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
@@ -29,7 +37,43 @@ export default function Settings() {
           <span>Daily ritual prompts<br /><span className="text-xs text-ink-mute">Morning & evening power questions</span></span>
           <input type="checkbox" checked={settings.rituals} onChange={e => setSettings({ rituals: e.target.checked })} />
         </label>
-        <button className="btn-ghost text-sm mt-1" onClick={() => setSettings({ onboarded: false })}>▶ Replay the guided tour</button>
+        <div className="flex flex-wrap gap-2 mt-1">
+          <button className="btn-primary text-sm" onClick={startTour}>▶ Start interactive tutorial</button>
+          <button className="btn-ghost text-sm" onClick={() => setSettings({ onboarded: false })}>Replay first-run setup</button>
+        </div>
+        <p className="text-[11px] text-ink-mute mt-1.5">The interactive tutorial highlights each part of the app and has you use it for real, step by step. Come back to it anytime.</p>
+      </section>
+
+      <section className="card p-4 mb-4">
+        <p className="label">Feedback & ideas</p>
+        <p className="text-sm text-ink-mute mb-2">Spot a bug or think of an improvement? Jot it here the moment it happens — everything is kept in one list you can copy and share later.</p>
+        <form className="flex gap-2" onSubmit={e => {
+          e.preventDefault()
+          if (!note.trim()) return
+          upsert<FeedbackNote>('feedback', { id: uid(), updatedAt: now(), text: note.trim(), createdAt: now() })
+          setNote('')
+          setToast('✓ Feedback saved')
+        }}>
+          <input className="input" placeholder="e.g. The Week screen should…" value={note} onChange={e => setNote(e.target.value)} />
+          <button className="btn-primary shrink-0">Add</button>
+        </form>
+        {notes.length > 0 && (
+          <>
+            <div className="mt-3 space-y-1.5 max-h-56 overflow-y-auto">
+              {notes.map(n => (
+                <div key={n.id} className="flex items-start gap-2 text-sm bg-black/5 dark:bg-white/10 rounded-lg px-2.5 py-1.5">
+                  <span className="flex-1">{n.text}</span>
+                  <span className="text-[10px] text-ink-mute shrink-0 mt-0.5">{new Date(n.createdAt).toLocaleDateString()}</span>
+                  <button className="text-ink-mute text-xs px-1" onClick={() => softDelete('feedback', n.id)}>✕</button>
+                </div>
+              ))}
+            </div>
+            <button className="btn-ghost text-xs mt-2" onClick={() => {
+              const all = notes.map(n => `- [${new Date(n.createdAt).toLocaleDateString()}] ${n.text}`).join('\n')
+              navigator.clipboard.writeText(all).then(() => setToast('✓ All feedback copied — paste it anywhere'))
+            }}>⧉ Copy all ({notes.length})</button>
+          </>
+        )}
       </section>
 
       <section className="card p-4 mb-4">

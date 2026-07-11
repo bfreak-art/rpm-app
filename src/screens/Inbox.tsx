@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useStore, live } from '../store/store'
+import { useStore, live, blockTotals } from '../store/store'
 import { HelpButton } from '../components/ui'
 import { NewBlockModal } from '../components/capture'
 import { dayKey, weekKey } from '../lib/utils'
@@ -14,7 +14,9 @@ Tap an item to select it (or drag it on desktop), then drop it on a Block. Anyth
 export default function Inbox() {
   const db = useStore(s => s.db)
   const chunkCapture = useStore(s => s.chunkCapture)
+  const markChunked = useStore(s => s.markChunked)
   const dismissCapture = useStore(s => s.dismissCapture)
+  const setToast = useStore(s => s.setToast)
   const [selected, setSelected] = useState<ID[]>([])
   const [newBlock, setNewBlock] = useState(false)
 
@@ -24,7 +26,13 @@ export default function Inbox() {
       ((b.scope === 'daily' && b.periodDate === dayKey()) || (b.scope === 'weekly' && b.periodDate === weekKey()) || b.scope === 'project'))
 
   const toggle = (id: ID) => setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id])
-  const assign = (blockId: ID) => { selected.forEach(id => chunkCapture(id, blockId)); setSelected([]) }
+  const assign = (blockId: ID) => {
+    const n = selected.length
+    selected.forEach(id => chunkCapture(id, blockId))
+    setSelected([])
+    const b = db.blocks[blockId]
+    setToast(`✓ ${n} item${n > 1 ? 's' : ''} added to \u201C${b?.result ?? 'Block'}\u201D`)
+  }
 
   const Item = ({ c }: { c: CaptureItem }) => (
     <div
@@ -48,24 +56,31 @@ export default function Inbox() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="card p-3">
+        <div className="card p-3" data-tour="inbox-list">
           <p className="label">Unsorted capture</p>
           {unsorted.length === 0 && <p className="text-sm text-ink-mute p-2">Empty head, clear mind. Press ＋ (or C) to capture anytime.</p>}
           {unsorted.map(c => <Item key={c.id} c={c} />)}
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2" data-tour="chunk-targets">
           <p className="label px-1">Chunk into a Result {selected.length > 0 && <span className="text-signal">— {selected.length} selected, tap a target</span>}</p>
           {targets.map(b => {
             const cat = b.categoryId ? db.categories[b.categoryId] : undefined
+            const t = blockTotals(db, b.id)
             return (
               <button key={b.id}
                 onClick={() => selected.length && assign(b.id)}
                 onDragOver={e => e.preventDefault()}
-                onDrop={e => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id) chunkCapture(id, b.id) }}
+                onDrop={e => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id) { chunkCapture(id, b.id); setToast(`✓ Added to \u201C${b.result}\u201D`) } }}
                 className={`card p-3 text-left border-l-4 text-sm ${selected.length ? 'ring-2 ring-signal/30' : ''}`}
                 style={{ borderLeftColor: cat?.color ?? '#5A6B85' }}>
-                <span className="h-display text-lg block leading-tight">{b.result}</span>
+                <span className="flex items-start justify-between gap-2">
+                  <span className="h-display text-lg block leading-tight">{b.result}</span>
+                  <span key={t.count} className="animate-pop shrink-0 text-[11px] font-bold rounded-full px-2 py-0.5"
+                    style={{ background: `${cat?.color ?? '#5A6B85'}22`, color: cat?.color ?? '#5A6B85' }}>
+                    {t.count} action{t.count === 1 ? '' : 's'}
+                  </span>
+                </span>
                 <span className="text-[11px] text-ink-mute">{b.scope === 'project' ? 'Project Key Result' : b.scope === 'weekly' ? 'This week' : 'Today'}{cat ? ` · ${cat.juicyName || cat.name}` : ''}</span>
               </button>
             )
@@ -81,7 +96,8 @@ export default function Inbox() {
       </div>
 
       <NewBlockModal open={newBlock} onClose={() => setNewBlock(false)}
-        onCreated={b => { selected.forEach(id => chunkCapture(id, b.id)); setSelected([]) }} />
+        prefillActions={selected.map(id => db.captures[id]?.text).filter(Boolean) as string[]}
+        onCreated={b => { selected.forEach(id => markChunked(id, b.id)); setSelected([]); setToast(`✓ Block created with ${selected.length || 'your'} action${selected.length === 1 ? '' : 's'}`) }} />
     </div>
   )
 }
