@@ -69,6 +69,69 @@ function M7Editor({ cat, onClose }: { cat: Category; onClose: () => void }) {
   )
 }
 
+/** The actual Wheel of Life: one segment per active category, filled to its latest rating.
+ *  Rebuilds automatically as categories are added, renamed, recolored, or archived. */
+function WheelOfLife({ cats }: { cats: Category[] }) {
+  const rated = cats.filter(c => true)
+  if (rated.length < 2) return null
+  const size = 240
+  const cx = size / 2, cy = size / 2
+  const R = size / 2 - 8
+  const n = rated.length
+  const avg = Math.round(
+    rated.reduce((s, c) => s + (c.wheel.length ? c.wheel[c.wheel.length - 1].pct : 0), 0) / n
+  )
+
+  const seg = (i: number, radius: number) => {
+    const a0 = (i / n) * 2 * Math.PI - Math.PI / 2
+    const a1 = ((i + 1) / n) * 2 * Math.PI - Math.PI / 2
+    const x0 = cx + radius * Math.cos(a0), y0 = cy + radius * Math.sin(a0)
+    const x1 = cx + radius * Math.cos(a1), y1 = cy + radius * Math.sin(a1)
+    const large = 1 / n > 0.5 ? 1 : 0
+    return `M ${cx} ${cy} L ${x0} ${y0} A ${radius} ${radius} 0 ${large} 1 ${x1} ${y1} Z`
+  }
+
+  return (
+    <div className="card p-4 mb-5 flex flex-col sm:flex-row items-center gap-4">
+      <svg width={size} height={size} className="shrink-0" role="img" aria-label="Wheel of Life">
+        {/* faint full segments as the 100% outline */}
+        {rated.map((c, i) => (
+          <path key={`bg-${c.id}`} d={seg(i, R)} fill={c.color} opacity={0.12}
+            stroke="currentColor" strokeOpacity={0.15} strokeWidth={1} />
+        ))}
+        {/* filled to the latest rating */}
+        {rated.map((c, i) => {
+          const pct = c.wheel.length ? c.wheel[c.wheel.length - 1].pct : 0
+          return <path key={c.id} d={seg(i, R * Math.max(0.04, pct / 100))} fill={c.color} opacity={0.85} />
+        })}
+        {/* guide rings */}
+        {[0.25, 0.5, 0.75].map(r => (
+          <circle key={r} cx={cx} cy={cy} r={R * r} fill="none" stroke="currentColor" strokeOpacity={0.12} />
+        ))}
+        <circle cx={cx} cy={cy} r={26} className="fill-paper-card dark:fill-paper-darkcard" />
+        <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle"
+          className="fill-current font-display" fontSize={20} fontWeight={700}>{avg}%</text>
+      </svg>
+      <div className="flex-1 min-w-0 w-full">
+        <p className="label">Wheel of Life — a balanced wheel rolls</p>
+        <p className="text-xs text-ink-mute mb-2">Each slice fills to how fulfilled you rated that category. Deep dents show where life is getting crowded out. Re-rate anytime with the sliders below.</p>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+          {rated.map(c => {
+            const pct = c.wheel.length ? c.wheel[c.wheel.length - 1].pct : null
+            return (
+              <div key={c.id} className="flex items-center gap-1.5 text-xs min-w-0">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: c.color }} />
+                <span className="truncate flex-1">{c.juicyName || c.name}</span>
+                <b className="shrink-0">{pct !== null ? `${pct}%` : '—'}</b>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function CategoryCard({ cat }: { cat: Category }) {
   const db = useStore(s => s.db)
   const upsert = useStore(s => s.upsert)
@@ -171,6 +234,7 @@ export default function LifePlan() {
         <h1 className="h-display text-4xl">Life Plan</h1>
         <HelpButton text={HELP} />
       </div>
+      <WheelOfLife cats={cats} />
       {areas.map((area, ai) => (
         <section key={area.id} className="mb-6" data-tour={ai === 0 ? 'lifeplan' : undefined}>
           <div className="flex items-center gap-3 mb-3">

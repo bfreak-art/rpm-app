@@ -28,6 +28,9 @@ interface StoreState {
   tourStep: number | null
   canUndo: boolean
   canRedo: boolean
+  xpBurst: { n: number; id: number } | null
+  celebration: 'day' | 'week' | null
+  setCelebration: (c: 'day' | 'week' | null) => void
 
   startTour: () => void
   endTour: () => void
@@ -55,6 +58,7 @@ interface StoreState {
   createBlock: (b: Partial<Block> & { result: string; purpose: string }) => Block
   addAction: (blockId: ID, text: string, extra?: Partial<Action>) => Action
   setActionStatus: (id: ID, status: ActionStatus) => void
+  moveAction: (id: ID, dir: -1 | 1) => void
   completeBlock: (id: ID) => void
   scheduleBlock: (blockId: ID, start: number, end: number) => Promise<Slot>
   moveSlot: (slotId: ID, start: number, end: number) => Promise<void>
@@ -94,6 +98,9 @@ export const useStore = create<StoreState>((set, get) => ({
   tourStep: null,
   canUndo: false,
   canRedo: false,
+  xpBurst: null,
+  celebration: null,
+  setCelebration: c => set({ celebration: c }),
 
   startTour: () => set({ tourStep: 0 }),
   endTour: () => set({ tourStep: null }),
@@ -178,7 +185,7 @@ export const useStore = create<StoreState>((set, get) => ({
   setSettings: patch => { set(s => ({ settings: { ...s.settings, ...patch } })); get().persist() },
 
   addXp: (n, reason) => {
-    set(s => ({ settings: { ...s.settings, xp: s.settings.xp + n } }))
+    set(s => ({ settings: { ...s.settings, xp: s.settings.xp + n }, xpBurst: { n, id: Date.now() } }))
     if (reason) get().setToast(`+${n} XP · ${reason}`)
     get().persist()
   },
@@ -302,10 +309,26 @@ export const useStore = create<StoreState>((set, get) => ({
     }
   },
 
+  moveAction: (id, dir) => {
+    const a = get().db.actions[id]
+    if (!a) return
+    const siblings = Object.values(get().db.actions)
+      .filter(x => !x.deleted && x.blockId === a.blockId)
+      .sort((x, y) => x.priority - y.priority)
+    const i = siblings.findIndex(x => x.id === id)
+    const j = i + dir
+    if (j < 0 || j >= siblings.length) return
+    const other = siblings[j]
+    const pa = a.priority
+    get().upsert<Action>('action', { ...a, priority: other.priority })
+    get().upsert<Action>('action', { ...other, priority: pa })
+  },
+
   completeBlock: id => {
     const b = get().db.blocks[id]
     if (!b || b.status === 'completed') return
     get().upsert<Block>('block', { ...b, status: 'completed' })
+    get().setToast('✦ Block completed — archived in History')
     if (b.purpose.trim()) get().addXp(XP.blockCompleted, 'Block complete')
     const acts = Object.values(get().db.actions).filter(a => !a.deleted && a.blockId === id)
     if (acts.some(a => a.status === 'notNeeded')) {
@@ -394,6 +417,7 @@ export const useStore = create<StoreState>((set, get) => ({
     get().upsert('review', review)
     if (isNew && r.type === 'daily' && (review.achievements || review.magicMoments || review.acknowledgment)) {
       get().addXp(XP.dailyReview, 'Complete · Measure · Celebrate')
+      set({ celebration: 'day' })
     }
     // Celebrant badge: 10 consecutive daily reviews with a magic moment
     const dailies = Object.values(get().db.reviews)

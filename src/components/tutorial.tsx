@@ -195,15 +195,20 @@ export default function Tutorial() {
   const waiting = step.advanceWhen && !step.advanceWhen(db, baselineRef.current)
   const last = tourStep === STEPS.length - 1
 
-  // tooltip placement: below target if room, else above, else centered
+  // tooltip placement: below target if room, else above; always fully clamped to the viewport
   const pad = 10
+  const CARD_H = Math.min(window.innerHeight * 0.6, 420)
   let cardStyle: React.CSSProperties
   if (rect) {
-    const below = rect.bottom + pad
+    const left = Math.min(Math.max(12, rect.left), Math.max(12, window.innerWidth - 372))
     const spaceBelow = window.innerHeight - rect.bottom
-    cardStyle = spaceBelow > 260
-      ? { top: below, left: Math.min(Math.max(12, rect.left), window.innerWidth - 372) }
-      : { bottom: window.innerHeight - rect.top + pad, left: Math.min(Math.max(12, rect.left), window.innerWidth - 372) }
+    const spaceAbove = rect.top
+    let top: number
+    if (spaceBelow >= CARD_H + pad) top = rect.bottom + pad
+    else if (spaceAbove >= CARD_H + pad) top = rect.top - pad - CARD_H
+    else top = Math.max(12, window.innerHeight - CARD_H - 12) // pin to bottom, fully visible
+    top = Math.min(Math.max(12, top), window.innerHeight - CARD_H - 12)
+    cardStyle = { top, left }
   } else {
     cardStyle = { top: '50%', left: '50%', transform: 'translate(-50%,-50%)' }
   }
@@ -226,8 +231,8 @@ export default function Tutorial() {
 
       {/* coach card */}
       <div
-        className="absolute pointer-events-auto card p-4 w-[min(92vw,360px)] max-h-[60vh] overflow-y-auto"
-        style={cardStyle}
+        className="absolute pointer-events-auto card p-4 w-[min(92vw,360px)] overflow-y-auto"
+        style={{ ...cardStyle, maxHeight: CARD_H }}
       >
         <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-mute mb-1">
           Tutorial · {tourStep + 1} / {STEPS.length}

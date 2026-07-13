@@ -53,11 +53,67 @@ export function markGlyph(s: ActionStatus) {
   return MARKS.find(m => m.s === s)?.glyph ?? ''
 }
 
+const DURATIONS = [5, 15, 30, 45, 60, 90, 120]
+
+function ActionEditModal({ a, onClose }: { a: Action; onClose: () => void }) {
+  const upsert = useStore(s => s.upsert)
+  const softDelete = useStore(s => s.softDelete)
+  const moveAction = useStore(s => s.moveAction)
+  const [dur, setDur] = useState<number | undefined>(a.durationMin)
+  const [lev, setLev] = useState(a.leverageTo ?? '')
+  const [must, setMust] = useState(!!a.isMust)
+
+  const save = () => {
+    upsert<Action>('action', { ...a, durationMin: dur, leverageTo: lev.trim() || undefined, isMust: must })
+    onClose()
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Action details">
+      <p className="text-sm font-medium mb-3 bg-black/5 dark:bg-white/10 rounded-lg px-3 py-2">{a.text}</p>
+
+      <span className="label">How long will it take?</span>
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {DURATIONS.map(d => (
+          <button key={d} onClick={() => setDur(dur === d ? undefined : d)}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors
+              ${dur === d ? 'bg-ink text-white border-ink dark:bg-signal dark:border-signal' : 'border-black/15 dark:border-white/20 hover:border-ink'}`}>
+            {d < 60 ? `${d}m` : `${d / 60}h`.replace('.5', '.5')}
+          </button>
+        ))}
+        <input type="number" min={1} placeholder="other" value={dur && !DURATIONS.includes(dur) ? dur : ''}
+          onChange={e => setDur(parseInt(e.target.value) || undefined)}
+          className="input w-20 py-1.5 text-sm" />
+      </div>
+
+      <span className="label">Is this a Must? <span className="text-signal">*</span></span>
+      <div className="flex gap-1.5 mb-3">
+        <button onClick={() => setMust(true)}
+          className={`flex-1 py-2 rounded-lg text-sm font-medium border ${must ? 'bg-signal text-white border-signal' : 'border-black/15 dark:border-white/20'}`}>Yes — non-negotiable</button>
+        <button onClick={() => setMust(false)}
+          className={`flex-1 py-2 rounded-lg text-sm font-medium border ${!must ? 'bg-ink text-white border-ink' : 'border-black/15 dark:border-white/20'}`}>No</button>
+      </div>
+
+      <span className="label">Leverage to (initials — who could do this for you?)</span>
+      <input className="input mb-3" value={lev} onChange={e => setLev(e.target.value)} placeholder="blank = you do it" />
+
+      <div className="flex gap-1.5 mb-3">
+        <button className="btn-ghost text-sm flex-1" onClick={() => { moveAction(a.id, -1); }}>↑ Move up</button>
+        <button className="btn-ghost text-sm flex-1" onClick={() => { moveAction(a.id, 1); }}>↓ Move down</button>
+        <button className="btn-ghost text-sm text-signal" onClick={() => { softDelete('action', a.id); onClose() }}>✕ Remove</button>
+      </div>
+
+      <button className="btn-signal w-full" onClick={save}>Save</button>
+    </Modal>
+  )
+}
+
 function ActionRow({ a }: { a: Action }) {
   const setStatus = useStore(s => s.setActionStatus)
   const softDelete = useStore(s => s.softDelete)
-  const upsert = useStore(s => s.upsert)
+  const moveAction = useStore(s => s.moveAction)
   const [menu, setMenu] = useState(false)
+  const [editing, setEditing] = useState(false)
   const done = a.status === 'done' || a.status === 'notNeeded' || a.status === 'leveraged'
   return (
     <div className="relative flex items-center gap-2 py-1 group">
@@ -88,14 +144,14 @@ function ActionRow({ a }: { a: Action }) {
         {a.leverageTo && <span className="ml-1.5 text-[11px] text-zone font-semibold uppercase">→ {a.leverageTo}</span>}
       </span>
       <span className="text-[11px] text-ink-mute shrink-0">{a.durationMin ? fmtDur(a.durationMin) : ''}</span>
-      <button className="opacity-0 group-hover:opacity-100 text-[11px] text-ink-mute px-1"
-        title="Toggle must / duration / leverage"
-        onClick={() => {
-          const dur = prompt('Duration in minutes (blank = none):', a.durationMin?.toString() ?? '')
-          const lev = prompt('Leverage to (initials, blank = none):', a.leverageTo ?? '')
-          const must = confirm('Is this a MUST? (OK = yes, Cancel = no)')
-          upsert('action', { ...a, durationMin: dur ? parseInt(dur) || undefined : undefined, leverageTo: lev || undefined, isMust: must })
-        }}>⋯</button>
+      <div className="hidden sm:flex flex-col opacity-0 group-hover:opacity-100">
+        <button aria-label="Move up" className="text-[9px] text-ink-mute leading-none px-1" onClick={() => moveAction(a.id, -1)}>▲</button>
+        <button aria-label="Move down" className="text-[9px] text-ink-mute leading-none px-1" onClick={() => moveAction(a.id, 1)}>▼</button>
+      </div>
+      <button className="text-[13px] text-ink-mute px-1.5 py-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10"
+        title="Duration · Must · Leverage · Reorder"
+        onClick={() => setEditing(true)}>⋯</button>
+      {editing && <ActionEditModal a={a} onClose={() => setEditing(false)} />}
     </div>
   )
 }

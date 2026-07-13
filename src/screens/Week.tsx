@@ -17,7 +17,7 @@ Organizing the week by Category is deliberate: no area of life gets crowded out.
 
 function PlanningWizard({ onClose }: { onClose: () => void }) {
   const db = useStore(s => s.db)
-  const { saveReview, addXp, setToast } = useStore.getState()
+  const { saveReview, addXp, setToast, setCelebration } = useStore.getState()
   const [step, setStep] = useState(0)
   const [challenges, setChallenges] = useState('')
   const [newBlockCat, setNewBlockCat] = useState<string | null>(null)
@@ -28,7 +28,7 @@ function PlanningWizard({ onClose }: { onClose: () => void }) {
   const finish = () => {
     saveReview({ type: 'weekly', date: wk, whatDidntHappen: lastWeekReview?.whatDidntHappen ?? '', achievements: lastWeekReview?.achievements ?? '', magicMoments: challenges ? `Anticipated challenges & game plan: ${challenges}` : (lastWeekReview?.magicMoments ?? ''), acknowledgment: lastWeekReview?.acknowledgment ?? '' })
     addXp(XP.weeklyPlan, 'Weekly Planning done')
-    setToast('Week planned. What\u2019s scheduled is real.')
+    setCelebration('week')
     onClose()
   }
 

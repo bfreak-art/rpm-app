@@ -12,6 +12,7 @@ import History from './screens/History'
 import Settings from './screens/Settings'
 import Onboarding from './screens/Onboarding'
 import Tutorial from './components/tutorial'
+import Rewards from './components/rewards'
 
 const NAV = [
   { to: '/', label: 'Today', icon: '◎' },
@@ -139,6 +140,7 @@ export default function App() {
       <CaptureOverlay open={captureOpen} onClose={() => setCaptureOpen(false)} />
 
       <Tutorial />
+      <Rewards />
 
       {/* More sheet (mobile): History & Settings */}
       {moreOpen && (
