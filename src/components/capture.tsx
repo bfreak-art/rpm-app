@@ -49,13 +49,18 @@ export function CaptureOverlay({ open, onClose }: { open: boolean; onClose: () =
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Capture">
+    <Modal open={open} onClose={onClose}>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="h-display text-2xl">Capture</h2>
+        <button className="btn-primary text-xs" onClick={onClose}>Done{count > 0 ? ` (${count})` : ''}</button>
+      </div>
       <div className="flex gap-1 mb-3">
         <button className={`btn flex-1 text-sm ${lane === 'idea' ? 'bg-ink text-white' : 'bg-black/5 dark:bg-white/10'}`} onClick={() => setLane('idea')}>Ideas · Wants · Needs</button>
         <button className={`btn flex-1 text-sm ${lane === 'comm' ? 'bg-ink text-white' : 'bg-black/5 dark:bg-white/10'}`} onClick={() => setLane('comm')}>Communications</button>
       </div>
       <form onSubmit={e => { e.preventDefault(); submit() }} className="flex gap-2">
-        <input ref={inputRef} className={`input transition-shadow ${flash ? 'ring-2 ring-zone' : ''}`} placeholder="Get it out of your head…" value={text} onChange={e => setText(e.target.value)} />
+        <input ref={inputRef} type="text" name="rpm-capture" autoComplete="off" autoCorrect="on" autoCapitalize="sentences" spellCheck enterKeyHint="send" data-lpignore="true" data-1p-ignore
+          className={`input transition-shadow ${flash ? 'ring-2 ring-zone' : ''}`} placeholder="Get it out of your head…" value={text} onChange={e => setText(e.target.value)} />
         {speechSupported && (
           <button type="button" onClick={toggleVoice}
             className={`btn shrink-0 ${listening ? 'bg-signal text-white animate-pulse' : 'bg-black/5 dark:bg-white/10'}`}
@@ -73,10 +78,9 @@ export function CaptureOverlay({ open, onClose }: { open: boolean; onClose: () =
           ))}
         </div>
       )}
-      <div className="mt-3 flex items-center justify-between text-xs text-ink-mute">
-        <span>{count > 0 ? `✓ ${count} captured — keep going, or…` : 'This is not your plan. Just empty your head.'}</span>
-        <button className="btn-primary text-xs" onClick={onClose}>Done</button>
-      </div>
+      <p className="mt-3 text-xs text-ink-mute">
+        {count > 0 ? `✓ ${count} captured — keep going, or tap Done above.` : 'This is not your plan. Just empty your head.'}
+      </p>
     </Modal>
   )
 }

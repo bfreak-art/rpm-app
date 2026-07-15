@@ -97,9 +97,10 @@ function ActionEditModal({ a, onClose }: { a: Action; onClose: () => void }) {
       <span className="label">Leverage to (initials — who could do this for you?)</span>
       <input className="input mb-3" value={lev} onChange={e => setLev(e.target.value)} placeholder="blank = you do it" />
 
-      <div className="flex gap-1.5 mb-3">
+      <div className="flex flex-wrap gap-1.5 mb-3">
         <button className="btn-ghost text-sm flex-1" onClick={() => { moveAction(a.id, -1); }}>↑ Move up</button>
         <button className="btn-ghost text-sm flex-1" onClick={() => { moveAction(a.id, 1); }}>↓ Move down</button>
+        <button className="btn-ghost text-sm" onClick={() => { useStore.getState().sendActionToInbox(a.id); onClose() }}>↩ To Inbox</button>
         <button className="btn-ghost text-sm text-signal" onClick={() => { softDelete('action', a.id); onClose() }}>✕ Remove</button>
       </div>
 

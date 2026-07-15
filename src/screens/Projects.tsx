@@ -3,6 +3,8 @@ import { Route, Routes, useNavigate, useParams, Link } from 'react-router-dom'
 import { useStore, live, blockTotals } from '../store/store'
 import { BlockCard, HelpButton, Modal, ResultRing } from '../components/ui'
 import { NewBlockModal } from '../components/capture'
+import { ScheduleModal } from './Today'
+import { Block } from '../lib/types'
 import { uid, now, weekKey } from '../lib/utils'
 import { Project } from '../lib/types'
 
@@ -56,6 +58,7 @@ function ProjectDetail() {
   const completeProject = useStore(s => s.completeProject)
   const cloneAsPathway = useStore(s => s.cloneAsPathway)
   const [newKR, setNewKR] = useState(false)
+  const [scheduling, setScheduling] = useState<Block | null>(null)
   const [celebrating, setCelebrating] = useState(false)
   const [wins, setWins] = useState('')
   const [improve, setImprove] = useState('')
@@ -77,8 +80,8 @@ function ProjectDetail() {
           <ResultRing pct={krs.length ? doneKr / krs.length : 0} size={64} color={cat?.color ?? '#E8563F'}>
             {doneKr}/{krs.length}
           </ResultRing>
-          <div>
-            <h1 className="h-display text-3xl leading-tight">{p.ultimateResult}</h1>
+          <div className="min-w-0">
+            <h1 className="h-display text-2xl sm:text-3xl leading-tight break-words">{p.ultimateResult}</h1>
             <p className="purpose-text mt-1">“{p.ultimatePurpose}”</p>
             <p className="text-xs text-ink-mute mt-1">
               {cat ? `${cat.juicyName || cat.name} · ` : ''}{p.targetDate ? `By ${p.targetDate} · ` : ''}Total Must Time in Key Results: {Math.round(totalMust / 60)}h
@@ -95,8 +98,12 @@ function ProjectDetail() {
 
       <h2 className="h-display text-2xl mt-5 mb-2">Key Results</h2>
       <div className="grid gap-3 sm:grid-cols-2">
-        {krs.map(b => <BlockCard key={b.id} block={b} categoryColor={cat?.color} />)}
+        {krs.map(b => <BlockCard key={b.id} block={b} categoryColor={cat?.color}
+          footer={b.status !== 'completed'
+            ? <div className="mt-2"><button className="btn-ghost text-xs" onClick={() => setScheduling(b)}>◷ Commit Block Time</button></div>
+            : undefined} />)}
       </div>
+      <ScheduleModal block={scheduling} open={!!scheduling} onClose={() => setScheduling(null)} />
 
       <div className="mt-4 flex flex-wrap gap-2">
         {p.status === 'active' && <>
@@ -138,11 +145,11 @@ function ProjectList() {
     const doneKr = krs.filter(b => b.status === 'completed').length
     const cat = p.categoryId ? db.categories[p.categoryId] : undefined
     return (
-      <Link to={`/projects/${p.id}`} className="card p-4 flex items-center gap-3 border-l-4 hover:shadow-md transition-shadow"
+      <Link to={`/projects/${p.id}`} className="card p-3 sm:p-4 flex items-center gap-3 border-l-4 hover:shadow-md transition-shadow min-w-0 overflow-hidden"
         style={{ borderLeftColor: cat?.color ?? '#5A6B85' }}>
         <ResultRing pct={krs.length ? doneKr / krs.length : 0} color={cat?.color ?? '#E8563F'}>{doneKr}/{krs.length}</ResultRing>
-        <div className="min-w-0">
-          <p className="h-display text-xl leading-tight truncate">{p.ultimateResult}</p>
+        <div className="min-w-0 flex-1">
+          <p className="h-display text-lg sm:text-xl leading-tight break-words">{p.ultimateResult}</p>
           <p className="text-xs text-ink-mute">{cat ? (cat.juicyName || cat.name) : '—'}{p.targetDate ? ` · by ${p.targetDate}` : ''}{p.sourcePathwayId ? ' · ⇉ from Pathway' : ''}</p>
         </div>
       </Link>

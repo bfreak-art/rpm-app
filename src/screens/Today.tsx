@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useStore, live, blockActions } from '../store/store'
 import { BlockCard, HelpButton, Modal } from '../components/ui'
 import { NewBlockModal } from '../components/capture'
-import { dayKey, weekKey, fmtTime, fmtDur } from '../lib/utils'
+import { dayKey, weekKey, fmtTime, fmtDur, fmtDay } from '../lib/utils'
 import { Block, Slot } from '../lib/types'
 import { format } from 'date-fns'
 
@@ -112,6 +112,8 @@ export default function Today() {
     .sort((a, b) => a.start - b.start)
 
   const bumped = live(db.slots).filter(s => s.status === 'bumped' && !s.rescheduledTo)
+  const staleBlocks = live(db.blocks).filter(b =>
+    b.scope === 'daily' && b.periodDate && b.periodDate < today && b.status !== 'completed')
   const review = live(db.reviews).find(r => r.type === 'daily' && r.date === today)
   const cat = (id?: string) => (id ? db.categories[id] : undefined)
 
@@ -124,13 +126,33 @@ export default function Today() {
       <p className="text-sm text-ink-mute mb-4">{format(new Date(), 'EEEE, d MMMM')}</p>
 
       {settings.rituals && !review?.morning && (
-        <form className="card p-3 mb-4 flex gap-2 items-center"
+        <form className="card p-3 mb-4"
           onSubmit={e => { e.preventDefault(); if (morning.trim()) saveReview({ type: 'daily', date: today, morning }) }}>
-          <span className="text-lg">☀</span>
-          <input className="input border-0 shadow-none bg-transparent" placeholder="Morning power question — what am I happy or excited about right now?"
-            value={morning} onChange={e => setMorning(e.target.value)} />
-          <button className="btn-ghost text-xs shrink-0">Save</button>
+          <p className="text-sm font-medium mb-1.5">☀ Morning power question</p>
+          <p className="text-sm text-ink-mute mb-2">What am I happy or excited about right now?</p>
+          <div className="flex gap-2">
+            <input className="input" placeholder="Type your answer…"
+              value={morning} onChange={e => setMorning(e.target.value)} />
+            <button className="btn-primary text-sm shrink-0">Save</button>
+          </div>
         </form>
+      )}
+
+      {staleBlocks.length > 0 && (
+        <div className="card p-3 mb-4 border-l-4 border-signal">
+          <p className="text-sm font-semibold mb-0.5">Unfinished from a previous day</p>
+          <p className="text-xs text-ink-mute mb-2">Results don't vanish overnight. Move the Block to today, or carry its open actions to the Inbox and archive it.</p>
+          {staleBlocks.map(b => {
+            const open = blockActions(db, b.id).filter(a => a.status === 'pending' || a.status === 'inProgress').length
+            return (
+              <div key={b.id} className="flex flex-wrap items-center gap-2 py-1.5 text-sm border-t border-black/5 dark:border-white/10 first:border-0">
+                <span className="flex-1 min-w-40">{b.result} <span className="text-xs text-ink-mute">({fmtDay(b.periodDate)} · {open} open)</span></span>
+                <button className="btn-signal text-xs" onClick={() => useStore.getState().moveBlockToToday(b.id)}>→ Move to today</button>
+                <button className="btn-ghost text-xs" onClick={() => useStore.getState().carryBlockForward(b.id)}>➜ Actions to Inbox</button>
+              </div>
+            )
+          })}
+        </div>
       )}
 
       {bumped.length > 0 && (

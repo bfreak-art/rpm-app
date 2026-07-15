@@ -37,6 +37,10 @@ export default function Settings() {
           <span>Daily ritual prompts<br /><span className="text-xs text-ink-mute">Morning & evening power questions</span></span>
           <input type="checkbox" checked={settings.rituals} onChange={e => setSettings({ rituals: e.target.checked })} />
         </label>
+        <label className="flex items-center justify-between py-2 text-sm">
+          <span>Sounds<br /><span className="text-xs text-ink-mute">Subtle audio feedback on captures, completions, and celebrations</span></span>
+          <input type="checkbox" checked={settings.sounds} onChange={e => setSettings({ sounds: e.target.checked })} />
+        </label>
         <div className="flex flex-wrap gap-2 mt-1">
           <button className="btn-primary text-sm" onClick={startTour}>▶ Start interactive tutorial</button>
           <button className="btn-ghost text-sm" onClick={() => setSettings({ onboarded: false })}>Replay first-run setup</button>
@@ -99,8 +103,10 @@ export default function Settings() {
         {syncEnabled && sessionEmail && (
           <div className="text-sm">
             <p>Signed in as <b>{sessionEmail}</b> — synced across your devices.</p>
-            <div className="flex gap-2 mt-2">
+            <div className="flex gap-2 mt-2 flex-wrap">
               <button className="btn-ghost text-sm" onClick={() => syncNow()}>Sync now</button>
+              <button className="btn-ghost text-sm" onClick={() => useStore.getState().fullResync()}
+                title="Re-downloads everything from the server — use if devices ever look out of sync">⟳ Full re-sync</button>
               <button className="btn-ghost text-sm text-signal" onClick={async () => { await signOut(); setSessionEmail(null) }}>Sign out</button>
             </div>
           </div>

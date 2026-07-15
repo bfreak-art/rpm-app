@@ -122,6 +122,7 @@ export interface FeedbackNote extends Base {
 export interface Settings {
   theme: 'light' | 'dark'
   rituals: boolean
+  sounds: boolean
   onboarded: boolean
   xp: number
   weeklyPlanDay: number // 0=Sun

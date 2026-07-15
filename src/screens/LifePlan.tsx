@@ -24,9 +24,12 @@ function M7Editor({ cat, onClose }: { cat: Category; onClose: () => void }) {
   const upsert = useStore(s => s.upsert)
   const checkM7Complete = useStore(s => s.checkM7Complete)
   const [m7, setM7] = useState<Magnificent7>({ ...cat.m7, threeToThrive: [...cat.m7.threeToThrive] as [string, string, string] })
+  const [rolesStr, setRolesStr] = useState(cat.roles.join(', '))
 
   const save = () => {
-    upsert<Category>('category', { ...cat, m7 })
+    const roles = rolesStr.split(',').map(r => r.trim()).filter(Boolean)
+    // Roles live in ONE place: the category chips. m7.roles mirrors them for completeness tracking.
+    upsert<Category>('category', { ...cat, roles, m7: { ...m7, roles: roles.join(', ') } })
     checkM7Complete(cat.id)
     onClose()
   }
@@ -34,15 +37,18 @@ function M7Editor({ cat, onClose }: { cat: Category; onClose: () => void }) {
   return (
     <Modal open onClose={onClose} title={`Magnificent 7 — ${cat.juicyName || cat.name}`} wide>
       <div className="space-y-3">
-        {M7_FIELDS.slice(0, 3).map(f => (
+        {M7_FIELDS.slice(0, 2).map(f => (
           <div key={f.key}>
             <span className="label">{f.label}</span>
             <p className="text-xs text-ink-mute mb-1">{f.hint}</p>
-            {f.area
-              ? <textarea className="input min-h-16" value={m7[f.key] as string} onChange={e => setM7({ ...m7, [f.key]: e.target.value })} />
-              : <input className="input" value={m7[f.key] as string} onChange={e => setM7({ ...m7, [f.key]: e.target.value })} />}
+            <textarea className="input min-h-16" value={m7[f.key] as string} onChange={e => setM7({ ...m7, [f.key]: e.target.value })} />
           </div>
         ))}
+        <div>
+          <span className="label">3 · Roles</span>
+          <p className="text-xs text-ink-mute mb-1">Who do I want to be here? These are the same role chips shown on the category card — one place, always in sync.</p>
+          <input className="input" value={rolesStr} onChange={e => setRolesStr(e.target.value)} placeholder="comma-separated, e.g. Healthy strongman, Happy eater" />
+        </div>
         <div>
           <span className="label">4 · 3-to-Thrive</span>
           <p className="text-xs text-ink-mute mb-1">The 3 focus areas with the biggest impact.</p>

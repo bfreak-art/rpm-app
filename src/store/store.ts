@@ -7,6 +7,7 @@ import {
 import { uid, now, dayKey, weekKey, XP, DEFAULT_CATEGORY_COLORS, DEFAULT_PERSONAL, DEFAULT_PROFESSIONAL, BADGES } from '../lib/utils'
 import { pushEntities, pullEntities, syncEnabled } from '../lib/sync'
 import { createEvent, updateEvent, deleteEvent } from '../lib/gcal'
+import { play } from '../lib/sound'
 
 const emptyDB = (): DB => ({
   areas: {}, categories: {}, projects: {}, blocks: {}, actions: {},
@@ -14,7 +15,7 @@ const emptyDB = (): DB => ({
 })
 
 const defaultSettings = (): Settings => ({
-  theme: 'light', rituals: true, onboarded: false, xp: 0,
+  theme: 'light', rituals: true, sounds: true, onboarded: false, xp: 0,
   weeklyPlanDay: 0, gcalConnected: false, lastSyncAt: 0
 })
 
@@ -41,6 +42,7 @@ interface StoreState {
   load: () => Promise<void>
   persist: () => void
   syncNow: () => Promise<void>
+  fullResync: () => Promise<void>
   setToast: (t: string | null) => void
   setSettings: (patch: Partial<Settings>) => void
   addXp: (n: number, reason?: string) => void
@@ -66,6 +68,9 @@ interface StoreState {
   deleteSlot: (slotId: ID) => Promise<void>
   markBumpedSlots: () => void
   carryForward: (actionId: ID, toPeriod: 'day' | 'week') => void
+  sendActionToInbox: (actionId: ID) => void
+  moveBlockToToday: (blockId: ID) => void
+  carryBlockForward: (blockId: ID) => void
   saveReview: (r: Partial<Review> & { type: 'daily' | 'weekly'; date: string }) => void
   completeProject: (id: ID, wins: string, improvements: string) => void
   cloneAsPathway: (kind: 'block' | 'project', id: ID, periodDate: string) => void
@@ -112,6 +117,7 @@ export const useStore = create<StoreState>((set, get) => ({
     const target = past.pop()!
     applyRestored(get, set, target)
     set({ canUndo: past.length > 0, canRedo: true })
+    play('whoosh', get().settings.sounds)
     get().setToast('↶ Undone')
   },
 
@@ -155,8 +161,10 @@ export const useStore = create<StoreState>((set, get) => ({
         return row ? { kind, row } : null
       }).filter(Boolean) as { kind: Kind; row: Base }[]
       if (records.length) await pushEntities(records)
-      // pull newer
-      const pulled = await pullEntities(settings.lastSyncAt)
+      // pull newer — with a 48h overlap window so rows pushed late by another
+      // device (offline queue, clock skew) are never skipped
+      const LOOKBACK = 48 * 3600 * 1000
+      const pulled = await pullEntities(Math.max(0, settings.lastSyncAt - LOOKBACK))
       if (pulled.length) {
         set(s => {
           const db2 = { ...s.db }
@@ -175,6 +183,12 @@ export const useStore = create<StoreState>((set, get) => ({
     } finally {
       set({ syncing: false })
     }
+  },
+
+  fullResync: async () => {
+    set(s => ({ settings: { ...s.settings, lastSyncAt: 0 } }))
+    await get().syncNow()
+    get().setToast('✓ Full re-sync complete')
   },
 
   setToast: t => {
@@ -251,6 +265,7 @@ export const useStore = create<StoreState>((set, get) => ({
     get().upsert<CaptureItem>('capture', {
       id: uid(), updatedAt: now(), text: text.trim(), lane, createdAt: now(), status: 'unsorted'
     })
+    play('pop', get().settings.sounds)
     if (firstToday) get().addXp(XP.captureFirstOfDay, 'Capture streak')
   },
 
@@ -305,6 +320,7 @@ export const useStore = create<StoreState>((set, get) => ({
     const prev = a.status
     get().upsert<Action>('action', { ...a, status })
     if (status === 'done' && prev !== 'done') {
+      play('tick', get().settings.sounds)
       get().addXp(a.isMust ? XP.mustDone : XP.actionDone, a.isMust ? 'Must complete' : undefined)
     }
   },
@@ -328,6 +344,7 @@ export const useStore = create<StoreState>((set, get) => ({
     const b = get().db.blocks[id]
     if (!b || b.status === 'completed') return
     get().upsert<Block>('block', { ...b, status: 'completed' })
+    play('chime', get().settings.sounds)
     get().setToast('✦ Block completed — archived in History')
     if (b.purpose.trim()) get().addXp(XP.blockCompleted, 'Block complete')
     const acts = Object.values(get().db.actions).filter(a => !a.deleted && a.blockId === id)
@@ -395,6 +412,38 @@ export const useStore = create<StoreState>((set, get) => ({
       status: 'unsorted'
     })
     get().setToast(`➜ Carried to next ${toPeriod}'s Capture`)
+  },
+
+  sendActionToInbox: actionId => {
+    const a = get().db.actions[actionId]
+    if (!a) return
+    get().upsert<CaptureItem>('capture', {
+      id: uid(), updatedAt: now(), text: a.text, lane: 'idea', createdAt: now(), status: 'unsorted'
+    })
+    get().softDelete('action', actionId)
+    get().setToast('↩ Sent back to the Inbox')
+  },
+
+  moveBlockToToday: blockId => {
+    const b = get().db.blocks[blockId]
+    if (!b) return
+    get().upsert<Block>('block', { ...b, periodDate: dayKey() })
+    get().setToast('→ Block moved to today')
+  },
+
+  /** Workbook Step 5: open actions get ➜ carried over into the next Capture; the block is archived. */
+  carryBlockForward: blockId => {
+    const acts = Object.values(get().db.actions)
+      .filter(a => !a.deleted && a.blockId === blockId && (a.status === 'pending' || a.status === 'inProgress'))
+    for (const a of acts) {
+      get().upsert<Action>('action', { ...a, status: 'carriedOver' })
+      get().upsert<CaptureItem>('capture', {
+        id: uid(), updatedAt: now(), text: a.text, lane: 'idea', createdAt: now(), status: 'unsorted'
+      })
+    }
+    const b = get().db.blocks[blockId]
+    if (b) get().upsert<Block>('block', { ...b, status: 'completed' })
+    get().setToast(`➜ ${acts.length} action${acts.length === 1 ? '' : 's'} carried to Inbox · block archived`)
   },
 
   saveReview: r => {

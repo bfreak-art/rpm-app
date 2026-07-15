@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../store/store'
+import { play } from '../lib/sound'
 
 /** Floating "+N XP" burst near the bottom of the screen on every XP gain. */
 function XpBurst() {
@@ -43,6 +44,7 @@ function Celebration() {
 
   useEffect(() => {
     if (!celebration) return
+    play('fanfare', useStore.getState().settings.sounds)
     const t = setTimeout(() => setCelebration(null), celebration === 'week' ? 4200 : 2800)
     return () => clearTimeout(t)
   }, [celebration]) // eslint-disable-line react-hooks/exhaustive-deps
