@@ -1,5 +1,5 @@
 import { ReactNode, useState } from 'react'
-import { useStore, blockActions, blockTotals } from '../store/store'
+import { useStore, blockActions, blockTotals, live } from '../store/store'
 import { Block, Action, ActionStatus } from '../lib/types'
 import { fmtDur } from '../lib/utils'
 
@@ -62,15 +62,17 @@ function ActionEditModal({ a, onClose }: { a: Action; onClose: () => void }) {
   const [dur, setDur] = useState<number | undefined>(a.durationMin)
   const [lev, setLev] = useState(a.leverageTo ?? '')
   const [must, setMust] = useState(!!a.isMust)
+  const [text, setText] = useState(a.text)
 
   const save = () => {
-    upsert<Action>('action', { ...a, durationMin: dur, leverageTo: lev.trim() || undefined, isMust: must })
+    upsert<Action>('action', { ...a, text: text.trim() || a.text, durationMin: dur, leverageTo: lev.trim() || undefined, isMust: must })
     onClose()
   }
 
   return (
     <Modal open onClose={onClose} title="Action details">
-      <p className="text-sm font-medium mb-3 bg-black/5 dark:bg-white/10 rounded-lg px-3 py-2">{a.text}</p>
+      <span className="label">Action</span>
+      <input className="input mb-3" value={text} onChange={e => setText(e.target.value)} />
 
       <span className="label">How long will it take?</span>
       <div className="flex flex-wrap gap-1.5 mb-3">
@@ -157,6 +159,45 @@ function ActionRow({ a }: { a: Action }) {
   )
 }
 
+/* ---------- Block editing ---------- */
+export function BlockEditModal({ block, onClose }: { block: Block; onClose: () => void }) {
+  const db = useStore(s => s.db)
+  const upsert = useStore(s => s.upsert)
+  const softDelete = useStore(s => s.softDelete)
+  const [result, setResult] = useState(block.result)
+  const [purpose, setPurpose] = useState(block.purpose)
+  const [categoryId, setCategoryId] = useState(block.categoryId ?? '')
+  const [isMust, setIsMust] = useState(!!block.isMust)
+  const cats = live(db.categories).filter(c => !c.archived)
+
+  return (
+    <Modal open onClose={onClose} title="Edit Block">
+      <span className="label">Result</span>
+      <input className="input mb-2" value={result} onChange={e => setResult(e.target.value)} />
+      <span className="label">Purpose</span>
+      <textarea className="input min-h-20 mb-2" value={purpose} onChange={e => setPurpose(e.target.value)} />
+      <span className="label">Category</span>
+      <select className="input mb-2" value={categoryId} onChange={e => setCategoryId(e.target.value)}>
+        <option value="">—</option>
+        {cats.map(c => <option key={c.id} value={c.id}>{c.juicyName || c.name}</option>)}
+      </select>
+      <label className="flex items-center gap-2 text-sm mb-3">
+        <input type="checkbox" checked={isMust} onChange={e => setIsMust(e.target.checked)} />
+        <span><b className="text-signal">*</b> Must Result</span>
+      </label>
+      <div className="flex gap-2">
+        <button className="btn-signal flex-1" onClick={() => {
+          upsert<Block>('block', { ...block, result: result.trim() || block.result, purpose: purpose.trim(), categoryId: categoryId || undefined, isMust })
+          onClose()
+        }}>Save</button>
+        <button className="btn-ghost text-signal" onClick={() => {
+          if (confirm('Delete this Block and its actions?')) { softDelete('block', block.id); onClose() }
+        }}>Delete</button>
+      </div>
+    </Modal>
+  )
+}
+
 /* ---------- Block card: MAP left · Result circled · Purpose right ---------- */
 export function BlockCard({ block, categoryColor, compact, footer }: {
   block: Block; categoryColor?: string; compact?: boolean; footer?: ReactNode
@@ -165,6 +206,7 @@ export function BlockCard({ block, categoryColor, compact, footer }: {
   const addAction = useStore(s => s.addAction)
   const completeBlock = useStore(s => s.completeBlock)
   const [newAction, setNewAction] = useState('')
+  const [editingBlock, setEditingBlock] = useState(false)
   const acts = blockActions(db, block.id)
   const t = blockTotals(db, block.id)
   const pct = t.count ? t.done / t.count : 0
@@ -179,11 +221,14 @@ export function BlockCard({ block, categoryColor, compact, footer }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             {block.isMust && <span className="text-signal font-bold" title="Must Result">*</span>}
-            <h3 className="h-display text-xl leading-tight">{block.result}</h3>
+            <h3 className="h-display text-xl leading-tight break-words flex-1">{block.result}</h3>
+            <button aria-label="Edit block" className="text-ink-mute text-sm px-1.5 py-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 shrink-0"
+              onClick={() => setEditingBlock(true)}>✎</button>
           </div>
           {block.purpose && <p className="purpose-text mt-0.5">“{block.purpose}”</p>}
         </div>
       </div>
+      {editingBlock && <BlockEditModal block={block} onClose={() => setEditingBlock(false)} />}
 
       {!compact && (
         <>

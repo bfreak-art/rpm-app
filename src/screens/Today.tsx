@@ -19,11 +19,12 @@ export function ScheduleModal({ block, open, onClose, replacingSlot }: {
   const upsert = useStore(s => s.upsert)
   const [date, setDate] = useState(dayKey())
   const [start, setStart] = useState('09:00')
-  const [mins, setMins] = useState(90)
+  const [mins, setMins] = useState('90')
   if (!block) return null
   const go = async () => {
+    const m = Math.max(5, parseInt(mins) || 60)
     const s = new Date(`${date}T${start}`).getTime()
-    const slot = await scheduleBlock(block.id, s, s + mins * 60000)
+    const slot = await scheduleBlock(block.id, s, s + m * 60000)
     if (replacingSlot) {
       upsert<Slot>('slot', { ...replacingSlot, rescheduledTo: slot.id })
     }
@@ -35,7 +36,19 @@ export function ScheduleModal({ block, open, onClose, replacingSlot }: {
       <div className="grid grid-cols-3 gap-2">
         <div className="col-span-1"><span className="label">Day</span><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></div>
         <div><span className="label">Start</span><input type="time" className="input" value={start} onChange={e => setStart(e.target.value)} /></div>
-        <div><span className="label">Minutes</span><input type="number" className="input" value={mins} min={15} step={15} onChange={e => setMins(parseInt(e.target.value) || 60)} /></div>
+        <div>
+          <span className="label">Minutes</span>
+          <input type="text" inputMode="numeric" pattern="[0-9]*" className="input" value={mins}
+            onChange={e => setMins(e.target.value.replace(/[^0-9]/g, ''))} placeholder="90" />
+          <div className="flex gap-1 mt-1.5 flex-wrap">
+            {[30, 45, 60, 90, 120].map(m => (
+              <button key={m} type="button" onClick={() => setMins(String(m))}
+                className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${mins === String(m) ? 'bg-ink text-white border-ink dark:bg-signal dark:border-signal' : 'border-black/15 dark:border-white/20'}`}>
+                {m < 60 ? `${m}m` : `${m / 60}h`}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
       <button className="btn-signal w-full mt-4" onClick={go}>Schedule it</button>
     </Modal>
@@ -111,7 +124,14 @@ export default function Today() {
     .filter(s => dayKey(new Date(s.start)) === today && s.status !== 'bumped')
     .sort((a, b) => a.start - b.start)
 
-  const bumped = live(db.slots).filter(s => s.status === 'bumped' && !s.rescheduledTo)
+  const bumpedAll = live(db.slots).filter(s => {
+    if (s.status !== 'bumped' || s.rescheduledTo) return false
+    const b = db.blocks[s.blockId]
+    return !!b && !b.deleted && b.status !== 'completed'
+  })
+  // one entry per block — no more duplicate rows when several slots were missed
+  const bumped = [...new Map(bumpedAll.map(s => [s.blockId, s])).values()]
+  const bumpedExtra = (blockId: string) => bumpedAll.filter(s => s.blockId === blockId).length - 1
   const staleBlocks = live(db.blocks).filter(b =>
     b.scope === 'daily' && b.periodDate && b.periodDate < today && b.status !== 'completed')
   const review = live(db.reviews).find(r => r.type === 'daily' && r.date === today)
@@ -161,11 +181,12 @@ export default function Today() {
           {bumped.map(s => {
             const b = db.blocks[s.blockId]
             if (!b) return null
+            const extra = bumpedExtra(s.blockId)
             return (
               <div key={s.id} className="flex items-center gap-2 text-sm py-1">
-                <span className="flex-1">{b.result}</span>
+                <span className="flex-1">{b.result}{extra > 0 && <span className="text-xs text-ink-mute"> (+{extra} more missed)</span>}</span>
                 <button className="btn-signal text-xs" onClick={() => setScheduling({ block: b, replacing: s })}>Reschedule</button>
-                <button className="btn-ghost text-xs" onClick={() => deleteSlot(s.id)}>Let go</button>
+                <button className="btn-ghost text-xs" onClick={() => bumpedAll.filter(x => x.blockId === s.blockId).forEach(x => deleteSlot(x.id))}>Let go</button>
               </div>
             )
           })}

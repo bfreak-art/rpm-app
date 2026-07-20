@@ -52,6 +52,42 @@ function NewProjectModal({ open, onClose }: { open: boolean; onClose: () => void
   )
 }
 
+function EditProjectForm({ p, onDone, upsert, cats }: {
+  p: Project; onDone: () => void
+  upsert: <T extends { id: string; updatedAt: number }>(kind: any, row: T) => T
+  cats: { id: string; name: string; juicyName?: string }[]
+}) {
+  const [ur, setUr] = useState(p.ultimateResult)
+  const [up, setUp] = useState(p.ultimatePurpose)
+  const [date, setDate] = useState(p.targetDate ?? '')
+  const [catId, setCatId] = useState(p.categoryId ?? '')
+  return (
+    <>
+      <span className="label">Ultimate Result</span>
+      <input className="input mb-2" value={ur} onChange={e => setUr(e.target.value)} />
+      <span className="label">Ultimate Purpose</span>
+      <textarea className="input min-h-20 mb-2" value={up} onChange={e => setUp(e.target.value)} />
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <div>
+          <span className="label">Category</span>
+          <select className="input" value={catId} onChange={e => setCatId(e.target.value)}>
+            <option value="">—</option>
+            {cats.map(c => <option key={c.id} value={c.id}>{c.juicyName || c.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <span className="label">Target date</span>
+          <input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} />
+        </div>
+      </div>
+      <button className="btn-signal w-full" onClick={() => {
+        upsert('project', { ...p, ultimateResult: ur.trim() || p.ultimateResult, ultimatePurpose: up.trim(), targetDate: date || undefined, categoryId: catId || undefined })
+        onDone()
+      }}>Save</button>
+    </>
+  )
+}
+
 function ProjectDetail() {
   const { id } = useParams()
   const db = useStore(s => s.db)
@@ -60,6 +96,7 @@ function ProjectDetail() {
   const [newKR, setNewKR] = useState(false)
   const [scheduling, setScheduling] = useState<Block | null>(null)
   const [celebrating, setCelebrating] = useState(false)
+  const [editing, setEditing] = useState(false)
   const [wins, setWins] = useState('')
   const [improve, setImprove] = useState('')
   const nav = useNavigate()
@@ -67,6 +104,7 @@ function ProjectDetail() {
   const p = id ? db.projects[id] : undefined
   if (!p || p.deleted) return <p className="text-ink-mute">Project not found. <Link className="underline" to="/projects">Back to Projects</Link></p>
 
+  const upsert = useStore(s => s.upsert)
   const krs = live(db.blocks).filter(b => b.projectId === p.id)
   const doneKr = krs.filter(b => b.status === 'completed').length
   const cat = p.categoryId ? db.categories[p.categoryId] : undefined
@@ -87,6 +125,8 @@ function ProjectDetail() {
               {cat ? `${cat.juicyName || cat.name} · ` : ''}{p.targetDate ? `By ${p.targetDate} · ` : ''}Total Must Time in Key Results: {Math.round(totalMust / 60)}h
             </p>
           </div>
+          <button aria-label="Edit project" className="text-ink-mute text-sm px-1.5 py-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 shrink-0"
+            onClick={() => setEditing(true)}>✎</button>
         </div>
         {p.status === 'completed' && p.celebration && (
           <div className="mt-3 text-sm bg-zone-soft dark:bg-zone/20 rounded-lg p-3">
@@ -117,6 +157,10 @@ function ProjectDetail() {
         )}
       </div>
 
+      <Modal open={editing} onClose={() => setEditing(false)} title="Edit Project">
+        <EditProjectForm p={p} onDone={() => setEditing(false)} upsert={upsert} cats={live(db.categories).filter(c => !c.archived)} />
+      </Modal>
+
       <NewBlockModal open={newKR} onClose={() => setNewKR(false)}
         defaults={{ projectId: p.id, categoryId: p.categoryId, scope: 'project', periodDate: '' }} />
 
@@ -141,7 +185,8 @@ function ProjectList() {
   const done = projects.filter(p => p.status === 'completed')
 
   const Card = ({ p }: { p: Project }) => {
-    const krs = live(db.blocks).filter(b => b.projectId === p.id)
+    const upsert = useStore(s => s.upsert)
+  const krs = live(db.blocks).filter(b => b.projectId === p.id)
     const doneKr = krs.filter(b => b.status === 'completed').length
     const cat = p.categoryId ? db.categories[p.categoryId] : undefined
     return (

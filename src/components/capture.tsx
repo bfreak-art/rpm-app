@@ -40,9 +40,10 @@ export function CaptureOverlay({ open, onClose }: { open: boolean; onClose: () =
     rec.interimResults = false
     rec.onresult = (e: any) => {
       const t = e.results[e.results.length - 1][0].transcript.trim()
-      if (t) { useStore.getState().addCapture(t, lane); setCount(c => c + 1) }
+      // put the words IN the input so you can see and edit them, then press Enter to save
+      if (t) setText(prev => (prev ? prev + ' ' : '') + t)
     }
-    rec.onend = () => setListening(false)
+    rec.onend = () => { setListening(false); inputRef.current?.focus() }
     recRef.current = rec
     rec.start()
     setListening(true)

@@ -160,6 +160,7 @@ export const useStore = create<StoreState>((set, get) => ({
         const row = (db[KIND_TO_KEY[kind]] as Record<string, Base>)[id]
         return row ? { kind, row } : null
       }).filter(Boolean) as { kind: Kind; row: Base }[]
+      const pushedIds = records.map(r => r.row.id)
       if (records.length) await pushEntities(records)
       // pull newer — with a 48h overlap window so rows pushed late by another
       // device (offline queue, clock skew) are never skipped
@@ -178,10 +179,19 @@ export const useStore = create<StoreState>((set, get) => ({
           return { db: db2 }
         })
       }
-      set(s => ({ dirty: {}, settings: { ...s.settings, lastSyncAt: now() } }))
+      // only clear what we actually pushed — anything created DURING this sync stays dirty
+      set(s => {
+        const d = { ...s.dirty }
+        for (const id of pushedIds) delete d[id]
+        return { dirty: d, settings: { ...s.settings, lastSyncAt: now() } }
+      })
       get().persist()
     } finally {
       set({ syncing: false })
+      // mutations that arrived mid-sync were blocked by the syncing guard — sweep them now
+      if (Object.keys(get().dirty).length > 0) {
+        setTimeout(() => get().syncNow().catch(() => {}), 400)
+      }
     }
   },
 
@@ -344,6 +354,13 @@ export const useStore = create<StoreState>((set, get) => ({
     const b = get().db.blocks[id]
     if (!b || b.status === 'completed') return
     get().upsert<Block>('block', { ...b, status: 'completed' })
+    // clean up outstanding slots — a completed Result has nothing left to reschedule
+    for (const sl of Object.values(get().db.slots)) {
+      if (!sl.deleted && sl.blockId === id && sl.status !== 'completed') {
+        if (sl.gcalEventId && get().settings.gcalConnected) deleteEvent(sl.gcalEventId).catch(() => {})
+        get().softDelete('slot', sl.id)
+      }
+    }
     play('chime', get().settings.sounds)
     get().setToast('✦ Block completed — archived in History')
     if (b.purpose.trim()) get().addXp(XP.blockCompleted, 'Block complete')
