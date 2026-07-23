@@ -441,11 +441,36 @@ export const useStore = create<StoreState>((set, get) => ({
     get().setToast('↩ Sent back to the Inbox')
   },
 
+  /** Move an unfinished Block forward. Work already finished is split off into an
+   *  archived snapshot (so History keeps the record of what you did that day) and only
+   *  the still-open actions travel with the Block — no accumulating clutter. */
   moveBlockToToday: blockId => {
     const b = get().db.blocks[blockId]
     if (!b) return
+    const acts = Object.values(get().db.actions).filter(a => !a.deleted && a.blockId === blockId)
+    const isFinished = (st: ActionStatus) => st === 'done' || st === 'notNeeded' || st === 'leveraged'
+    const finished = acts.filter(a => isFinished(a.status))
+    const open = acts.filter(a => !isFinished(a.status))
+
+    if (finished.length > 0 && open.length > 0) {
+      const snap: Block = {
+        id: uid(), updatedAt: now(),
+        result: b.result, purpose: b.purpose,
+        categoryId: b.categoryId, projectId: b.projectId,
+        scope: b.scope, periodDate: b.periodDate, isMust: b.isMust,
+        status: 'completed', sourcePathwayId: b.sourcePathwayId
+      }
+      get().upsert('block', snap)
+      finished.forEach(a => get().upsert<Action>('action', { ...a, blockId: snap.id }))
+      // renumber the travelling actions so priorities stay 1..n
+      open.sort((x, y) => x.priority - y.priority)
+        .forEach((a, i) => get().upsert<Action>('action', { ...a, priority: i + 1 }))
+    }
+
     get().upsert<Block>('block', { ...b, periodDate: dayKey() })
-    get().setToast('→ Block moved to today')
+    get().setToast(finished.length > 0 && open.length > 0
+      ? `→ Moved with ${open.length} open action${open.length === 1 ? '' : 's'} · ${finished.length} done archived`
+      : '→ Block moved to today')
   },
 
   /** Workbook Step 5: open actions get ➜ carried over into the next Capture; the block is archived. */
